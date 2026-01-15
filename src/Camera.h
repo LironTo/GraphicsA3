@@ -13,6 +13,9 @@
 #include <Debugger.h>
 #include <Shader.h>
 
+//added 
+#include "CubeFaceRotations.h"
+
 class Camera
 {
     private:
@@ -42,16 +45,25 @@ class Camera
         double m_OldMouseY = 0.0;
         double m_NewMouseX = 0.0;
         double m_NewMouseY = 0.0;
+        float m_RotationX = 45.0f;
+        float m_RotationY = 45.0f;
     public:
         Camera(int width, int height)
             : m_Width(width), m_Height(height) {};
 
+        // Update View matrix based on current position and orientation
+        void UpdateViewMatrix();
+
         // Update Projection matrix for Orthographic mode
         void SetOrthographic(float near, float far);
+
+        // Update Projection matrix for Perspective mode
+        void SetPerspective(float fovDegree, float near, float far);
 
         // Handle camera inputs
         void EnableInputs(GLFWwindow* window);
 
+        inline void SetPosition(glm::vec3 position) { m_Position = position; UpdateViewMatrix(); }
         inline glm::mat4 GetViewMatrix() const { return m_View; }
         inline glm::mat4 GetProjectionMatrix() const { return m_Projection; }
 };

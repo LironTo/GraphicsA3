@@ -12,7 +12,7 @@ struct VertexBufferElement
     unsigned int count;
     unsigned char normalized;
 
-    static unsigned int GetSizeOfType(unsigned int type)
+    static constexpr unsigned int GetSizeOfType(unsigned int type)
     {
         switch (type)
         {
@@ -44,7 +44,7 @@ class VertexBufferLayout
             static_assert(sizeof(T) == 0, "Unsupported type!");
         }
 
-        inline const std::vector<VertexBufferElement> GetElements() const { return m_Elements; }
+        inline const std::vector<VertexBufferElement>& GetElements() const { return m_Elements; }
         inline unsigned int GetStride() const { return m_Stride; }
 };
 
