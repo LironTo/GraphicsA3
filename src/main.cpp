@@ -74,12 +74,15 @@ CubeFaceRotations g_cubeFaceRotations;
 // Store the 27 cubies and their current transformation matrices
 std::vector<glm::mat4> g_cubieMatrices;
 
+// Global animation state
+RotationAnimation g_rotationAnimation;
+
 void RotateFace(glm::vec3 axis, int axisIndex, float posValue, float angle) {
     glm::mat4 rot = glm::rotate(glm::mat4(1.0f), angle, axis);
     for (auto& matrix : g_cubieMatrices) {
         // Check if the cubie is on the face by looking at its current translation
         // The translation is stored in the 4th column (index 3) of the matrix
-        if (glm::abs(matrix[3][axisIndex] - posValue) < 0.1f) {
+             if (glm::abs(matrix[3][axisIndex] - posValue) < 0.1f) {
             // Orbit the cubie around the center of the cube
             matrix = rot * matrix;
         }
@@ -184,11 +187,29 @@ int main(int argc, char* argv[])
                     g_cubieMatrices.push_back(glm::translate(glm::mat4(1.0f), glm::vec3((float)x, (float)y, (float)z)));
         
         /*creates variables  */
+        float lastFrameTime = 0.0f;
         /* Loop until the user closes the window */
         while (!glfwWindowShouldClose(window))
         {
             /* Set white background color */
             GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+
+            float currentTime = (float)glfwGetTime();
+            float deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+
+            /* Update Animation */
+            if (g_rotationAnimation.active) {
+                float step = g_rotationAnimation.speed * deltaTime;
+                float dir = (g_rotationAnimation.targetAngle > 0) ? 1.0f : -1.0f;
+                g_rotationAnimation.currentAngle += dir * step;
+
+                if (glm::abs(g_rotationAnimation.currentAngle) >= glm::abs(g_rotationAnimation.targetAngle)) {
+                    // Animation finished: commit the final 90-degree rotation to the matrices
+                    RotateFace(g_rotationAnimation.axis, g_rotationAnimation.axisIndex, g_rotationAnimation.posValue, g_rotationAnimation.targetAngle);
+                    g_rotationAnimation.active = false;
+                }
+            }
 
             /* Render here */
             GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
@@ -229,9 +250,22 @@ int main(int argc, char* argv[])
             /* Draw the 27 cubies using their stored matrices */
             va.Bind();
             ib.Bind();
-            for (const auto& cubieMatrix : g_cubieMatrices)
+            for (size_t i = 0; i < g_cubieMatrices.size(); i++)
             {
-                glm::mat4 mvp = proj * view * globalRotation * cubieMatrix;
+                glm::mat4 model = g_cubieMatrices[i];
+
+                // If this cubie is currently animating, apply the partial rotation
+                if (g_rotationAnimation.active) {
+                    for (size_t idx : g_rotationAnimation.movingCubieIndices) {
+                        if (idx == i) {
+                            glm::mat4 animRot = glm::rotate(glm::mat4(1.0f), g_rotationAnimation.currentAngle, g_rotationAnimation.axis);
+                            model = animRot * model;
+                            break;
+                        }
+                    }
+                }
+
+                glm::mat4 mvp = proj * view * globalRotation * model;
                 shader.SetUniformMat4f("u_MVP", mvp);
                 GLCall(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
             }

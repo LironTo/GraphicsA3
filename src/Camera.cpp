@@ -62,10 +62,14 @@ void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods
         return;
     }
 
+    // Prevent overlapping animations
+    extern RotationAnimation g_rotationAnimation;
+    if (g_rotationAnimation.active) return;
+
     if (action == GLFW_PRESS || action == GLFW_REPEAT)
     {
         // Access the global cube face rotation struct
-        float baseAngle = glm::radians(90.0f);
+        float baseAngle = (mods & GLFW_MOD_SHIFT) ? glm::radians(-90.0f) : glm::radians(90.0f);
 
         // 1. Reconstruct the current global rotation of the cube
         glm::mat4 globalRotation = glm::rotate(glm::mat4(1.0f), glm::radians(camera->m_RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -109,12 +113,20 @@ void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods
         glm::vec3 localRotationAxis(0.0f);
         localRotationAxis[bestIdx] = 1.0f;
 
-        // The rotation angle is adjusted by bestSign to maintain clockwise/counter-clockwise 
-        // consistency relative to the face being viewed.
-        RotateFace(localRotationAxis, bestIdx, bestSign, baseAngle * bestSign);
+        // Start the animation
+        g_rotationAnimation.axis = localRotationAxis;
+        g_rotationAnimation.axisIndex = bestIdx;
+        g_rotationAnimation.posValue = bestSign;
+        g_rotationAnimation.targetAngle = baseAngle * bestSign;
+        g_rotationAnimation.currentAngle = 0.0f;
+        g_rotationAnimation.movingCubieIndices.clear();
+        for (size_t i = 0; i < g_cubieMatrices.size(); i++) {
+            if (glm::abs(g_cubieMatrices[i][3][bestIdx] - bestSign) < 0.1f) {
+                g_rotationAnimation.movingCubieIndices.push_back(i);
+            }
+        }
+        g_rotationAnimation.active = true;
 
-        std::cout << "Rotated Camera-Relative Face (Local Axis: " << bestIdx 
-                  << ", Sign: " << bestSign << ")" << std::endl;
     }
 }
 
