@@ -77,6 +77,9 @@ class Camera
         // Handle mouse movement deltas and update rotation
         void HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed);
 
+        // Handle mouse scroll for zooming
+        void HandleScroll(double yoffset);
+
         // Find which local cube axis is most aligned with a world direction
         AxisMapping GetWorldToLocalMapping(glm::vec3 worldDir) const;
 

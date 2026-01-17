@@ -57,6 +57,18 @@ void Camera::HandleMouseMovement(double xpos, double ypos, bool leftButtonPresse
     }
 }
 
+void Camera::HandleScroll(double yoffset)
+{
+    // Adjust the Z position. Scrolling up (positive yoffset) moves the camera closer.
+    m_Position.z -= (float)yoffset * 0.5f;
+
+    // Clamp the zoom distance to keep the cube visible and prevent flipping the view
+    if (m_Position.z < 2.0f) m_Position.z = 2.0f;
+    if (m_Position.z > 50.0f) m_Position.z = 50.0f;
+
+    UpdateViewMatrix();
+}
+
 void Camera::UpdateViewMatrix()
 {
     m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up) * GetRotationMatrix();
@@ -219,8 +231,7 @@ void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffse
         std::cout << "Warning: Camera wasn't set as the Window User Pointer! ScrollCallback is skipped" << std::endl;
         return;
     }
-
-    std::cout << "SCROLL Motion" << std::endl;
+    camera->HandleScroll(scrollOffsetY);
 }
 
 void Camera::EnableInputs(GLFWwindow* window)
