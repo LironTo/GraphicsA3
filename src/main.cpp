@@ -68,9 +68,6 @@ unsigned int indices[] = {
     20, 21, 22, 22, 23, 20  // Left
 };
 
-// Struct to hold rotation state for each face
-CubeFaceRotations g_cubeFaceRotations;
-
 // Store the 27 cubies and their current transformation matrices
 std::vector<glm::mat4> g_cubieMatrices;
 
@@ -86,6 +83,21 @@ void RotateFace(glm::vec3 axis, int axisIndex, float posValue, float angle) {
             // Orbit the cubie around the center of the cube
             matrix = rot * matrix;
         }
+    }
+}
+
+void UpdateAnimation(float deltaTime) {
+    if (!g_rotationAnimation.active) return;
+
+    float step = g_rotationAnimation.speed * deltaTime;
+    float dir = (g_rotationAnimation.targetAngle > 0) ? 1.0f : -1.0f;
+    g_rotationAnimation.currentAngle += dir * step;
+
+    if (glm::abs(g_rotationAnimation.currentAngle) >= glm::abs(g_rotationAnimation.targetAngle)) {
+        // Animation finished: commit the final rotation to the matrices
+        RotateFace(g_rotationAnimation.axis, g_rotationAnimation.axisIndex, g_rotationAnimation.posValue, g_rotationAnimation.targetAngle);
+        g_rotationAnimation.active = false;
+        
     }
 }
 
@@ -199,27 +211,13 @@ int main(int argc, char* argv[])
             lastFrameTime = currentTime;
 
             /* Update Animation */
-            if (g_rotationAnimation.active) {
-                float step = g_rotationAnimation.speed * deltaTime;
-                float dir = (g_rotationAnimation.targetAngle > 0) ? 1.0f : -1.0f;
-                g_rotationAnimation.currentAngle += dir * step;
-
-                if (glm::abs(g_rotationAnimation.currentAngle) >= glm::abs(g_rotationAnimation.targetAngle)) {
-                    // Animation finished: commit the final 90-degree rotation to the matrices
-                    RotateFace(g_rotationAnimation.axis, g_rotationAnimation.axisIndex, g_rotationAnimation.posValue, g_rotationAnimation.targetAngle);
-                    g_rotationAnimation.active = false;
-                }
-            }
+            UpdateAnimation(deltaTime);
 
             /* Render here */
             GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
             /* Initialize uniform color */
             glm::vec4 color = glm::vec4(1.0);
-
-            /* Create a global rotation for the whole Rubik's Cube */
-            glm::mat4 globalRotation = glm::rotate(glm::mat4(1.0f), glm::radians(camera.m_RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
-            globalRotation = glm::rotate(globalRotation, glm::radians(camera.m_RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
 
             glm::mat4 view = camera.GetViewMatrix();
             glm::mat4 proj = camera.GetProjectionMatrix();
@@ -239,7 +237,7 @@ int main(int argc, char* argv[])
             GLCall(glDrawArrays(GL_LINES, 0, 6));
 
             /* Draw Local Axes (Rotating with the cube) */
-            shader.SetUniformMat4f("u_MVP", proj * view * globalRotation);
+            shader.SetUniformMat4f("u_MVP", proj * view);
             GLCall(glLineWidth(5.0f));
             GLCall(glDrawArrays(GL_LINES, 0, 6));
             GLCall(glLineWidth(1.0f)); // Reset line width
@@ -265,7 +263,7 @@ int main(int argc, char* argv[])
                     }
                 }
 
-                glm::mat4 mvp = proj * view * globalRotation * model;
+                glm::mat4 mvp = proj * view * model;
                 shader.SetUniformMat4f("u_MVP", mvp);
                 GLCall(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
             }

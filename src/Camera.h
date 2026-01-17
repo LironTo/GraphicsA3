@@ -9,7 +9,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/vector_angle.hpp>
-
 #include <Debugger.h>
 #include <Shader.h>
 
@@ -39,15 +38,25 @@ class Camera
         float m_Right = 1.0f;
         float m_Bottom = -1.0f; 
         float m_Top = 1.0f;
-    public:
-        // Prevent the camera from jumping around when first clicking left click
+
+        // Rotation and mouse state
         double m_OldMouseX = 0.0;
         double m_OldMouseY = 0.0;
-        double m_NewMouseX = 0.0;
-        double m_NewMouseY = 0.0;
         float m_RotationX = 45.0f;
         float m_RotationY = 45.0f;
+
+
+
+
+
     public:
+
+        bool isLocked(int axisIndex, bool axisLocked[3][2]);
+        void SwitchLockedAxisState(int axisIndex, int sign, bool axisLocked[3][2]);
+     struct AxisMapping {
+            int index; // 0 for X, 1 for Y, 2 for Z
+            int sign; // 1 or -1
+        };
         Camera(int width, int height)
             : m_Width(width), m_Height(height) {};
 
@@ -63,7 +72,16 @@ class Camera
         // Handle camera inputs
         void EnableInputs(GLFWwindow* window);
 
+        // Get the rotation matrix based on current angles
+        glm::mat4 GetRotationMatrix() const;
+        // Handle mouse movement deltas and update rotation
+        void HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed);
+
+        // Find which local cube axis is most aligned with a world direction
+        AxisMapping GetWorldToLocalMapping(glm::vec3 worldDir) const;
+
         inline void SetPosition(glm::vec3 position) { m_Position = position; UpdateViewMatrix(); }
+        inline void SetMousePosition(double x, double y) { m_OldMouseX = x; m_OldMouseY = y; }
         inline glm::mat4 GetViewMatrix() const { return m_View; }
         inline glm::mat4 GetProjectionMatrix() const { return m_Projection; }
 };

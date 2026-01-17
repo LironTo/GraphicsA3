@@ -1,24 +1,15 @@
 #include <Camera.h>
 #include <string>
+#include <vector>
+#include <iostream>
+
+extern std::vector<glm::mat4> g_cubieMatrices;
 
 void PrintCameraMapping(Camera* camera) {
-    glm::mat4 globalRotation = glm::rotate(glm::mat4(1.0f), glm::radians(camera->m_RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
-    globalRotation = glm::rotate(globalRotation, glm::radians(camera->m_RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
-
     auto getMapping = [&](glm::vec3 worldDir) {
-        int bestIdx = 0;
-        float maxAbsDot = -1.0f;
-        float bestSign = 1.0f;
-        for (int i = 0; i < 3; i++) {
-            float d = glm::dot(glm::vec3(globalRotation[i]), worldDir);
-            if (glm::abs(d) > maxAbsDot) {
-                maxAbsDot = glm::abs(d);
-                bestIdx = i;
-                bestSign = (d > 0.0f) ? 1.0f : -1.0f;
-            }
-        }
+        Camera::AxisMapping mapping = camera->GetWorldToLocalMapping(worldDir);
         const char* names[] = { "X", "Y", "Z" };
-        return std::string(names[bestIdx]) + (bestSign > 0 ? "+" : "-");
+        return std::string(names[mapping.index]) + (mapping.sign > 0 ? "+" : "-");
     };
 
     std::cout << "\n[ Camera-Relative Controls ]" << std::endl;
@@ -27,9 +18,48 @@ void PrintCameraMapping(Camera* camera) {
     std::cout << " U: " << getMapping(glm::vec3(0, 1, 0)) << "  |  D: " << getMapping(glm::vec3(0, -1, 0)) << std::endl;
 }
 
+glm::mat4 Camera::GetRotationMatrix() const
+{
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(m_RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
+    return glm::rotate(rotation, glm::radians(m_RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+Camera::AxisMapping Camera::GetWorldToLocalMapping(glm::vec3 worldDir) const
+{
+    glm::mat4 globalRotation = GetRotationMatrix();
+    int bestIdx = 0;
+    float maxAbsDot = -1.0f;
+    int bestSign = 1;
+
+    for (int i = 0; i < 3; i++) {
+        float d = glm::dot(glm::vec3(globalRotation[i]), worldDir);
+        if (glm::abs(d) > maxAbsDot) {
+            maxAbsDot = glm::abs(d);
+            bestIdx = i;
+            bestSign = (d > 0.0f) ? 1 : -1;
+        }
+    }
+    return { bestIdx, bestSign};
+}
+
+void Camera::HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed)
+{
+    double dx = m_OldMouseX - xpos;
+    double dy = m_OldMouseY - ypos;
+    m_OldMouseX = xpos;
+    m_OldMouseY = ypos;
+
+    if (leftButtonPressed)
+    {
+        m_RotationY -= (float)dx * 0.2f;
+        m_RotationX -= (float)dy * 0.2f;
+        UpdateViewMatrix();
+    }
+}
+
 void Camera::UpdateViewMatrix()
 {
-    m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up);
+    m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up) * GetRotationMatrix();
 }
 
 void Camera::SetOrthographic(float near, float far)
@@ -54,7 +84,7 @@ void Camera::SetPerspective(float fovDegree, float near, float far)
 // Input Callbacks //
 /////////////////////
 
-void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods)
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     Camera* camera = (Camera*) glfwGetWindowUserPointer(window);
     if (!camera) {
@@ -62,19 +92,35 @@ void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods
         return;
     }
 
+    // Persistent turn angle state
+    static float s_TurnAngle = 90.0f;
+    static bool axisLocked[3][2];// {{X, -X}, Y, -Y, Z, -Z
+    if (action == GLFW_PRESS)
+    {
+        if (key == GLFW_KEY_Z && s_TurnAngle < 180.0f) {
+            s_TurnAngle *= 2.0f;
+            std::cout << "Current Turn Angle: " << s_TurnAngle << " degrees" << std::endl;
+            return;
+        }
+        if (key == GLFW_KEY_A && s_TurnAngle  > 45.0f ) {
+            s_TurnAngle /= 2.0f;
+            std::cout << "Current Turn Angle: " << s_TurnAngle << " degrees" << std::endl;
+            return;
+        }
+    }
+
     // Prevent overlapping animations
     extern RotationAnimation g_rotationAnimation;
     if (g_rotationAnimation.active) return;
-
+    
+    
     if (action == GLFW_PRESS || action == GLFW_REPEAT)
     {
-        // Access the global cube face rotation struct
-        float baseAngle = (mods & GLFW_MOD_SHIFT) ? glm::radians(-90.0f) : glm::radians(90.0f);
-
-        // 1. Reconstruct the current global rotation of the cube
-        glm::mat4 globalRotation = glm::rotate(glm::mat4(1.0f), glm::radians(camera->m_RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
-        globalRotation = glm::rotate(globalRotation, glm::radians(camera->m_RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
-
+        // Use Space key state for reverse rotation
+        bool reverse = (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS);
+        float baseAngle = reverse ? glm::radians(-s_TurnAngle) : glm::radians(s_TurnAngle);
+        
+        
         // 2. Define the world-space direction associated with the key
         glm::vec3 worldDir(0.0f);
         switch (key)
@@ -88,30 +134,27 @@ void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods
             default:
                 return; // Not a rotation key
         }
+     
+
 
         // 3. Find which local cube axis is most aligned with the target world direction
-        int bestIdx = 0;
-        float maxAbsDot = -1.0f;
-        float bestSign = 1.0f;
+        Camera::AxisMapping mapping = camera->GetWorldToLocalMapping(worldDir);
+        int bestIdx = mapping.index;
+        int bestSign = mapping.sign;
 
-        for (int i = 0; i < 3; i++)
-        {
-            // The i-th column of globalRotation is the i-th local axis in world space
-            glm::vec3 localAxisInWorld = glm::vec3(globalRotation[i]);
-            float d = glm::dot(localAxisInWorld, worldDir);
-
-            if (glm::abs(d) > maxAbsDot)
-            {
-                maxAbsDot = glm::abs(d);
-                bestIdx = i;
-                bestSign = (d > 0.0f) ? 1.0f : -1.0f;
-            }
-        }
+        //check for axis lock toggles
+        if(camera->isLocked(bestIdx, axisLocked)) {std::cout << "Locked wall:" << (bestIdx == 0 ? "X" : bestIdx == 1 ? "Y" : "Z") <<  std::endl;   return ;} else if(s_TurnAngle == 45.0f) camera->SwitchLockedAxisState(bestIdx, bestSign, axisLocked);
+        
 
         // 4. Apply the rotation to the identified local face
         // We rotate around the local axis (X, Y, or Z)
         glm::vec3 localRotationAxis(0.0f);
         localRotationAxis[bestIdx] = 1.0f;
+
+
+        //turns all
+
+
 
         // Start the animation
         g_rotationAnimation.axis = localRotationAxis;
@@ -126,10 +169,19 @@ void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods
             }
         }
         g_rotationAnimation.active = true;
-
+        
     }
 }
-
+//checks if axis is locked
+bool Camera::isLocked(int axisIndex, bool axisLocked[3][2]) {
+    return axisLocked[(axisIndex + 1) % 3][0] ||
+    axisLocked[(axisIndex + 2) % 3][0] ||
+    axisLocked[(axisIndex + 1) % 3][1] ||
+    axisLocked[(axisIndex + 2) % 3][1];
+}
+void Camera::SwitchLockedAxisState(int axisIndex, int sign, bool axisLocked[3][2]) {
+    axisLocked[axisIndex][sign > 0 ? 0 : 1] = !axisLocked[axisIndex][sign > 0 ? 0 : 1];
+}  
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
     Camera* camera = (Camera*)glfwGetWindowUserPointer(window);
@@ -140,8 +192,7 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
         if (action == GLFW_PRESS) {
             double x, y;
             glfwGetCursorPos(window, &x, &y);
-            camera->m_OldMouseX = x;
-            camera->m_OldMouseY = y;
+            camera->SetMousePosition(x, y);
         }
         else if (action == GLFW_RELEASE) {
             PrintCameraMapping(camera);
@@ -157,16 +208,8 @@ void CursorPosCallback(GLFWwindow* window, double currMouseX, double currMouseY)
         return;
     }
 
-    camera->m_NewMouseX = camera->m_OldMouseX - currMouseX;
-    camera->m_NewMouseY = camera->m_OldMouseY - currMouseY;
-    camera->m_OldMouseX = currMouseX;
-    camera->m_OldMouseY = currMouseY;
-
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
-    {
-        camera->m_RotationY -= (float)camera->m_NewMouseX * 0.2f;
-        camera->m_RotationX -= (float)camera->m_NewMouseY * 0.2f;
-    }
+    bool leftPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    camera->HandleMouseMovement(currMouseX, currMouseY, leftPressed);
 }
 
 void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffsetY)
@@ -186,14 +229,14 @@ void Camera::EnableInputs(GLFWwindow* window)
     glfwSetWindowUserPointer(window, this);
 
     // Handle key inputs
-    glfwSetKeyCallback(window, (void(*)(GLFWwindow *, int, int, int, int)) KeyCallback);
+    glfwSetKeyCallback(window, KeyCallback);
 
     // Handle cursor buttons
     glfwSetMouseButtonCallback(window, MouseButtonCallback);
 
     // Handle cursor position and inputs on motion
-    glfwSetCursorPosCallback(window , (void(*)(GLFWwindow *, double, double)) CursorPosCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
 
     // Handle scroll inputs
-    glfwSetScrollCallback(window, (void(*)(GLFWwindow *, double, double)) ScrollCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
 }
