@@ -42,7 +42,7 @@ Camera::AxisMapping Camera::GetWorldToLocalMapping(glm::vec3 worldDir) const
     return { bestIdx, bestSign};
 }
 
-void Camera::HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed)
+void Camera::HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed, bool rightButtonPressed)
 {
     double dx = m_OldMouseX - xpos;
     double dy = m_OldMouseY - ypos;
@@ -53,6 +53,12 @@ void Camera::HandleMouseMovement(double xpos, double ypos, bool leftButtonPresse
     {
         m_RotationY -= (float)dx * 0.2f;
         m_RotationX -= (float)dy * 0.2f;
+        UpdateViewMatrix();
+    }
+    if (rightButtonPressed)
+    {
+        m_Position.x += (float)dx * 0.01f;
+        m_Position.y += (float)dy * 0.01f;
         UpdateViewMatrix();
     }
 }
@@ -199,7 +205,7 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     Camera* camera = (Camera*)glfwGetWindowUserPointer(window);
     if (!camera) return;
 
-    if (button == GLFW_MOUSE_BUTTON_LEFT)
+    if (button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT)
     {
         if (action == GLFW_PRESS) {
             double x, y;
@@ -221,7 +227,8 @@ void CursorPosCallback(GLFWwindow* window, double currMouseX, double currMouseY)
     }
 
     bool leftPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-    camera->HandleMouseMovement(currMouseX, currMouseY, leftPressed);
+    bool rightPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    camera->HandleMouseMovement(currMouseX, currMouseY, leftPressed, rightPressed);
 }
 
 void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffsetY)

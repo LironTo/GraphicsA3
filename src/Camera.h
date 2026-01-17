@@ -75,7 +75,7 @@ class Camera
         // Get the rotation matrix based on current angles
         glm::mat4 GetRotationMatrix() const;
         // Handle mouse movement deltas and update rotation
-        void HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed);
+        void HandleMouseMovement(double xpos, double ypos, bool leftButtonPressed, bool rightButtonPressed);
 
         // Handle mouse scroll for zooming
         void HandleScroll(double yoffset);
